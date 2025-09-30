@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/userdb
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    defer-datasource-initialization: false
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+
+eureka:
+  client:
+    enabled: false
+
+jwt:
+  secret: testSecretKey123456789012345678901234567890
+  expiration: 3600000
+
+logging:
+  level:
+    com.healthdata.user: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG

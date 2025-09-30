@@ -1,0 +1,5 @@
+package com.healthdata.user.application.port.in;
+
+public interface LoginUseCase {
+    LoginResponse login(LoginCommand command);
+}
