@@ -54,6 +54,14 @@ management:
       application: ${spring.application.name}
       version: '@project.version@'
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
 logging:
   level:
     com.healthdata.user: DEBUG
