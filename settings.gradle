@@ -1,1 +1,7 @@
-rootProject.name = 'kb-healthcare'
+rootProject.name = 'health-collection-system'
+
+include 'config-server'
+include 'discovery-server'
+include 'gateway-server'
+include 'user-service'
+include 'health-data-service'
