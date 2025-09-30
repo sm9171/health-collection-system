@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: health-data-service
+  datasource:
+    url: jdbc:mysql://localhost:3306/healthdb
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    defer-datasource-initialization: false
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+
+eureka:
+  client:
+    enabled: false
+
+logging:
+  level:
+    com.healthdata.health: DEBUG
