@@ -4,7 +4,12 @@ server:
 spring:
   application:
     name: gateway-server
-  
+  config:
+    import: optional:configserver:http://localhost:8888
+  cloud:
+    config:
+      fail-fast: false
+
 eureka:
   client:
     service-url:
@@ -12,9 +17,6 @@ eureka:
   instance:
     prefer-ip-address: true
 
-jwt:
-  secret: mySecretKey123456789012345678901234567890
-  expiration: 3600000
 
 management:
   endpoints:
