@@ -1,0 +1,35 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - RewritePath=/api/users/(?<segment>.*), /${segment}
+        - id: health-data-service
+          uri: lb://health-data-service
+          predicates:
+            - Path=/api/health/**
+          filters:
+            - RewritePath=/api/health/(?<segment>.*), /${segment}
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+jwt:
+  secret: your-secret-key-min-256-bits-long-for-hs256-algorithm-security
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    com.healthdata: DEBUG
+    org.springframework.cloud.gateway: DEBUG

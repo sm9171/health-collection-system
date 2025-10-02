@@ -4,12 +4,13 @@ server:
 spring:
   application:
     name: config-server
+  profiles:
+    active: native
   cloud:
     config:
       server:
-        git:
-          uri: file://${user.home}/config-repo
-          default-label: main
+        native:
+          search-locations: classpath:/config
 
 management:
   endpoints:
