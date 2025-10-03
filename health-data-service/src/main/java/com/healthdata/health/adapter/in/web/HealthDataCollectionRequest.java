@@ -11,9 +11,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record HealthDataCollectionRequest(
-    @NotBlank(message = "Record key is required")
-    String recordkey,
-    
     @Valid
     @NotNull(message = "Data is required")
     Data data

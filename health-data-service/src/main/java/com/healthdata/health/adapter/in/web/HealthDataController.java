@@ -31,16 +31,17 @@ public class HealthDataController {
 
     @PostMapping("/collect")
     @Operation(summary = "건강 데이터 수집", description = "사용자의 건강 활동 데이터를 수집합니다.")
-    @ApiResponse(responseCode = "201", description = "데이터 수집 성공", 
+    @ApiResponse(responseCode = "201", description = "데이터 수집 성공",
                 content = @Content(schema = @Schema(implementation = CollectResponse.class)))
     @ApiResponse(responseCode = "400", description = "입력값 검증 실패")
     @ApiResponse(responseCode = "409", description = "이미 수집된 데이터")
     public ResponseEntity<CollectResponse> collectHealthData(
             @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail,
+            @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey,
             @Valid @RequestBody HealthDataCollectionRequest request) {
-        
+
         CollectHealthDataCommand command = CollectHealthDataCommand.builder()
-                .recordKey(request.recordkey())
+                .recordKey(recordKey)
                 .entries(request.data().entries().stream()
                         .map(entry -> CollectHealthDataCommand.HealthDataEntry.builder()
                                 .from(entry.period().from())
@@ -53,11 +54,11 @@ public class HealthDataController {
                                 .build())
                         .toList())
                 .build();
-        
+
         collectHealthDataUseCase.collect(command);
-        
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new CollectResponse("Health data collected successfully", 
+                .body(new CollectResponse("Health data collected successfully",
                                         request.data().entries().size()));
     }
 
