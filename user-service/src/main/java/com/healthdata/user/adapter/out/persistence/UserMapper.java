@@ -12,6 +12,7 @@ public class UserMapper {
                 user.getNickname(),
                 user.getEmail().getValue(),
                 user.getPassword().getValue(),
+                user.getRecordKey().getValue(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
@@ -24,6 +25,7 @@ public class UserMapper {
                 entity.getNickname(),
                 entity.getEmail(),
                 entity.getPassword(),
+                entity.getRecordKey(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

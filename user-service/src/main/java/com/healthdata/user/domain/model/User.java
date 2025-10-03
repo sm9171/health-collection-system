@@ -2,6 +2,7 @@ package com.healthdata.user.domain.model;
 
 import com.healthdata.user.domain.vo.Email;
 import com.healthdata.user.domain.vo.Password;
+import com.healthdata.user.domain.vo.RecordKey;
 import com.healthdata.user.domain.vo.UserId;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,14 +19,16 @@ public class User {
     private String nickname;
     private Email email;
     private Password password;
+    private RecordKey recordKey;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    private User(String name, String nickname, Email email, Password password) {
+    private User(String name, String nickname, Email email, Password password, RecordKey recordKey) {
         this.name = name;
         this.nickname = nickname;
         this.email = email;
         this.password = password;
+        this.recordKey = recordKey;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -33,20 +36,22 @@ public class User {
     public static User create(String name, String nickname, String email, String rawPassword, PasswordEncoder encoder) {
         validateName(name);
         validateNickname(nickname);
-        
+
         Email emailVo = Email.of(email);
         Password passwordVo = Password.encode(rawPassword, encoder);
-        
-        return new User(name, nickname, emailVo, passwordVo);
+        RecordKey recordKeyVo = RecordKey.generate();
+
+        return new User(name, nickname, emailVo, passwordVo, recordKeyVo);
     }
 
-    public static User fromPersistence(Long id, String name, String nickname, String email, String encodedPassword, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public static User fromPersistence(Long id, String name, String nickname, String email, String encodedPassword, String recordKey, LocalDateTime createdAt, LocalDateTime updatedAt) {
         User user = new User();
         user.id = UserId.of(id);
         user.name = name;
         user.nickname = nickname;
         user.email = Email.of(email);
         user.password = Password.fromEncoded(encodedPassword);
+        user.recordKey = RecordKey.of(recordKey);
         user.createdAt = createdAt;
         user.updatedAt = updatedAt;
         return user;

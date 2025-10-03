@@ -29,17 +29,21 @@ public class UserJpaEntity {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "record_key", nullable = false, unique = true)
+    private String recordKey;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public UserJpaEntity(String name, String nickname, String email, String password, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public UserJpaEntity(String name, String nickname, String email, String password, String recordKey, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.name = name;
         this.nickname = nickname;
         this.email = email;
         this.password = password;
+        this.recordKey = recordKey;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }

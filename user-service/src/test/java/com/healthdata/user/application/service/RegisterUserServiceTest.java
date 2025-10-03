@@ -49,8 +49,8 @@ class RegisterUserServiceTest {
         when(passwordEncoder.encode(command.getPassword())).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
-            return User.fromPersistence(1L, user.getName(), user.getNickname(), 
-                    user.getEmail().getValue(), user.getPassword().getValue(),
+            return User.fromPersistence(1L, user.getName(), user.getNickname(),
+                    user.getEmail().getValue(), user.getPassword().getValue(), user.getRecordKey().getValue(),
                     user.getCreatedAt(), user.getUpdatedAt());
         });
         
