@@ -41,15 +41,17 @@ public class JwtAuthenticationFilter implements GatewayFilter {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            
+
             String email = claims.getSubject();
-            
+            String recordKey = claims.get("recordKey", String.class);
+
             ServerHttpRequest modifiedRequest = request.mutate()
                     .header("X-User-Email", email)
+                    .header("X-Record-Key", recordKey)
                     .build();
-            
+
             return chain.filter(exchange.mutate().request(modifiedRequest).build());
-            
+
         } catch (Exception e) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
