@@ -18,7 +18,7 @@ public class JwtTokenProvider {
     @Value("${jwt.expiration:3600000}")
     private long expirationTime;
 
-    public String generateToken(String email) {
+    public String generateToken(String email, String recordKey) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
 
@@ -26,6 +26,7 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(email)
+                .claim("recordKey", recordKey)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(key)

@@ -29,7 +29,7 @@ public class LoginService implements LoginUseCase {
             throw new InvalidCredentialsException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        String accessToken = jwtTokenProvider.generateToken(user.getEmail().getValue());
+        String accessToken = jwtTokenProvider.generateToken(user.getEmail().getValue(), user.getRecordKey().getValue());
 
         return new LoginResponse(
                 accessToken,
