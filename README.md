@@ -21,11 +21,18 @@
 - Spring Cloud 2024.0.0 (Gateway, Config, Eureka)
 - Spring Data JPA
 - Spring Security + JWT (JJWT 0.12.6)
+- Spring Kafka & Kafka Streams
+- Spring Batch
 
 ### Database & Cache
 - H2 Database (개발환경)
 - MySQL 8.0 (운영환경)
+- Redis 7.x (캐싱 및 실시간 집계)
 - Flyway (DB Migration)
+
+### Message Queue
+- Apache Kafka 7.5.0
+- Zookeeper
 
 ### Infrastructure
 - Docker & Docker Compose
@@ -223,6 +230,146 @@ tail -f logs/{service-name}.log
 # 에러 로그 검색
 grep -i error logs/*.log
 ```
+
+---
+
+## Health Data Service 하이브리드 처리 전략
+
+### 데이터 수집 및 처리 아키텍처
+
+```
+┌────────────────────────────────────────┐
+│      POST /health-data/collect         │
+└────────┬───────────────────────────────┘
+         │
+         ├──→ MySQL (health_data)
+         │    - 원본 데이터 영구 보관
+         │
+         ├──→ Kafka Topic (health-data-collected)
+         │    └──→ Kafka Streams (10분 윈도우)
+         │         └──→ Redis Hot Data (24시간 TTL)
+         │              - 실시간 집계
+         │
+         └──→ Batch Job (매일 새벽 2시)
+              └──→ MySQL (health_data_summary)
+                   └──→ Redis Warm Data (7일 TTL)
+                        - 일별 요약 캐싱
+```
+
+### 데이터 계층별 역할
+
+#### 1. MySQL 원본 데이터 (`health_data`)
+- **용도**: 모든 건강 데이터의 원본 저장
+- **특징**: 영구 보관, 정확한 데이터
+- **조회**: 상세 데이터 필요 시
+
+#### 2. Kafka Streams 실시간 집계
+- **토픽**: `health-data-collected`
+- **윈도우**: 10분 타임 윈도우
+- **집계 단위**: recordKey + 날짜별
+- **출력**: Redis Hot Data
+
+#### 3. Redis Hot Data
+- **Key 패턴**: `health:hot:{recordKey}:{date}`
+- **TTL**: 24시간
+- **용도**: 당일 실시간 집계 데이터
+- **갱신 주기**: Kafka Streams가 10분마다 업데이트
+
+#### 4. MySQL Summary (`health_data_summary`)
+- **생성 시점**: 매일 새벽 2시 배치 작업
+- **용도**: 일별 집계 데이터 영구 보관
+- **데이터**: 전날 하루치 집계 (총 걸음수, 칼로리, 거리, 엔트리 수)
+
+#### 5. Redis Warm Data
+- **Key 패턴**: `health:warm:{recordKey}:{date}`
+- **TTL**: 7일
+- **용도**: 배치로 생성된 요약 데이터 캐싱
+- **갱신**: 배치 작업 실행 시
+
+### 주요 컴포넌트
+
+**Kafka 관련:**
+- `HealthDataEventPublisher` - 데이터 수집 시 Kafka 이벤트 발행
+- `HealthDataStreamsProcessor` - 실시간 집계 및 Redis Hot Data 업데이트
+- `KafkaProducerConfig` - Kafka Producer 설정
+- `KafkaStreamsConfig` - Kafka Streams 설정
+
+**배치 관련:**
+- `DailyHealthDataAggregationJob` - 일별 집계 배치 작업
+- `BatchScheduler` - 스케줄러 (매일 새벽 2시 실행, Cron: `0 0 2 * * *`)
+
+**캐시 관련:**
+- `HealthDataCacheRepository` - Redis Hot/Warm Data 조회 및 저장
+- `RedisConfig` - Redis 연결 및 직렬화 설정
+
+### 성능 최적화 전략
+
+#### 실시간 조회 (당일 데이터)
+1. Redis Hot Data 우선 조회
+2. Cache Miss 시 MySQL 원본 조회
+
+#### 과거 데이터 조회
+1. Redis Warm Data 조회
+2. Cache Miss 시 MySQL Summary 조회
+3. Summary 없을 시 원본 데이터 조회
+
+#### 상세 데이터 조회
+- MySQL 원본 데이터 직접 조회
+
+### Kafka & Redis 모니터링
+
+#### Kafka Topics 확인
+```bash
+docker exec -it health-kafka kafka-topics --list --bootstrap-server localhost:9092
+
+# Consumer로 이벤트 확인
+docker exec -it health-kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic health-data-collected \
+  --from-beginning
+```
+
+#### Redis 데이터 확인
+```bash
+docker exec -it health-redis redis-cli
+
+# Hot Data 조회
+GET health:hot:{recordKey}:2024-11-15
+
+# Warm Data 조회
+GET health:warm:{recordKey}:2024-11-15
+
+# 모든 건강 데이터 키 조회
+KEYS health:*
+```
+
+#### MySQL Summary 확인
+```bash
+docker exec -it health-mysql mysql -uroot -proot healthdb
+
+# 요약 데이터 조회
+SELECT * FROM health_data_summary
+WHERE record_key = '{recordKey}'
+ORDER BY summary_date DESC;
+```
+
+### 배치 작업 관리
+
+#### 배치 스케줄 변경
+```java
+// BatchScheduler.java
+@Scheduled(cron = "0 0 2 * * *")  // 매일 새벽 2시
+public void runDailyAggregation()
+```
+
+#### 수동 배치 실행 (테스트용)
+```java
+// BatchScheduler.java에서 활성화
+@Scheduled(fixedDelay = 60000)  // 1분마다
+public void runTestAggregation()
+```
+
+---
 
 ## 라이센스
 
