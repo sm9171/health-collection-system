@@ -18,12 +18,10 @@ public class GatewayConfig {
     @Bean
     public RouteLocator routes(RouteLocatorBuilder builder) {
         return builder.routes()
-                .route("user-service", r -> r.path("/api/users/**")
-                        .filters(f -> f.rewritePath("/api/users/(?<segment>.*)", "/${segment}"))
+                .route("user-service", r -> r.path("/auth/**")
                         .uri("lb://user-service"))
-                .route("health-data-service", r -> r.path("/api/health/**")
-                        .filters(f -> f.rewritePath("/api/health/(?<segment>.*)", "/${segment}")
-                                .filter(jwtAuthenticationFilter))
+                .route("health-data-service", r -> r.path("/health-data/**")
+                        .filters(f -> f.filter(jwtAuthenticationFilter))
                         .uri("lb://health-data-service"))
                 .build();
     }
