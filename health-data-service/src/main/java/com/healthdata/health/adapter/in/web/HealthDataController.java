@@ -64,23 +64,23 @@ public class HealthDataController {
 
     @GetMapping
     @Operation(summary = "건강 데이터 조회", description = "기간별 건강 활동 데이터를 조회합니다.")
-    @ApiResponse(responseCode = "200", description = "데이터 조회 성공", 
+    @ApiResponse(responseCode = "200", description = "데이터 조회 성공",
                 content = @Content(schema = @Schema(implementation = HealthDataListResponse.class)))
     @ApiResponse(responseCode = "400", description = "입력값 검증 실패")
     public ResponseEntity<HealthDataListResponse> query(
             @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail,
-            @Parameter(description = "레코드 키", required = true) @RequestParam String recordKey,
-            @Parameter(description = "조회 시작 시간 (ISO DateTime)", required = true) 
+            @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey,
+            @Parameter(description = "조회 시작 시간 (ISO DateTime)", required = true)
             @RequestParam @DateTimeFormat(iso = ISO.DATE_TIME) LocalDateTime from,
-            @Parameter(description = "조회 종료 시간 (ISO DateTime)", required = true) 
+            @Parameter(description = "조회 종료 시간 (ISO DateTime)", required = true)
             @RequestParam @DateTimeFormat(iso = ISO.DATE_TIME) LocalDateTime to) {
-        
+
         QueryHealthDataCommand command = QueryHealthDataCommand.builder()
                 .recordKey(recordKey)
                 .from(from)
                 .to(to)
                 .build();
-        
+
         HealthDataListResponse response = queryHealthDataUseCase.query(command);
         return ResponseEntity.ok(response);
     }
