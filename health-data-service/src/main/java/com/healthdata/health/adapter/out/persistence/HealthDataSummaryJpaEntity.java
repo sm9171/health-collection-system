@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "health_data_summary")
+@Table(name = "daily_health_data_summary")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HealthDataSummaryJpaEntity {
