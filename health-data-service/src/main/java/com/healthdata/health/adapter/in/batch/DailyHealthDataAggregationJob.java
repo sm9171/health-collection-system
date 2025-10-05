@@ -1,14 +1,13 @@
 package com.healthdata.health.adapter.in.batch;
 
 import com.healthdata.health.adapter.out.cache.HealthDataCacheRepository;
-import com.healthdata.health.adapter.out.persistence.HealthDataSummaryJpaEntity;
-import com.healthdata.health.adapter.out.persistence.HealthDataSummaryJpaRepository;
-import com.healthdata.health.adapter.out.persistence.HealthDataSummaryMapper;
+import com.healthdata.health.adapter.out.persistence.*;
 import com.healthdata.health.domain.model.HealthDataSummary;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
@@ -16,9 +15,9 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import jakarta.persistence.EntityManagerFactory;
@@ -39,7 +38,6 @@ public class DailyHealthDataAggregationJob {
     private final HealthDataSummaryJpaRepository summaryRepository;
     private final HealthDataSummaryMapper summaryMapper;
     private final HealthDataCacheRepository cacheRepository;
-    private final JdbcTemplate jdbcTemplate;
 
     @Bean
     public Job aggregateHealthDataJob() {
@@ -52,31 +50,44 @@ public class DailyHealthDataAggregationJob {
     public Step aggregateStep() {
         return new StepBuilder("aggregateStep", jobRepository)
                 .<Map<String, Object>, HealthDataSummary>chunk(100, transactionManager)
-                .reader(healthDataReader())
+                .reader(healthDataReader(null))
                 .processor(healthDataProcessor())
                 .writer(healthDataWriter())
                 .build();
     }
 
     @Bean
-    public JpaPagingItemReader<Map<String, Object>> healthDataReader() {
-        LocalDate yesterday = LocalDate.now().minusDays(1);
-        LocalDateTime from = yesterday.atStartOfDay();
-        LocalDateTime to = yesterday.atTime(23, 59, 59);
+    @StepScope
+    public JpaPagingItemReader<Map<String, Object>> healthDataReader(
+            @Value("#{jobParameters['targetDate']}") String targetDateStr) {
 
-        String query = "SELECT h.recordKey as recordKey, " +
-                       "DATE(h.fromTime) as summaryDate, " +
+        // JobParameter에서 날짜 파싱, 없으면 어제 날짜 사용
+        LocalDate date;
+        if (targetDateStr != null && !targetDateStr.isEmpty()) {
+            date = LocalDate.parse(targetDateStr);
+        } else {
+            date = LocalDate.now().minusDays(1);
+        }
+
+        LocalDateTime from = date.atStartOfDay();
+        LocalDateTime to = date.atTime(23, 59, 59);
+
+        String query = "SELECT new map(" +
+                       "h.recordKey as recordKey, " +
+                       "CAST(h.fromTime AS LocalDate) as summaryDate, " +
                        "SUM(h.steps) as totalSteps, " +
-                       "SUM(h.calories.value) as totalCalories, " +
-                       "SUM(h.distance.value) as totalDistance, " +
-                       "COUNT(h) as entryCount " +
+                       "SUM(h.calories) as totalCalories, " +
+                       "SUM(h.distance) as totalDistance, " +
+                       "COUNT(h) as entryCount) " +
                        "FROM HealthDataJpaEntity h " +
                        "WHERE h.fromTime >= :from AND h.fromTime < :to " +
-                       "GROUP BY h.recordKey, DATE(h.fromTime)";
+                       "GROUP BY h.recordKey, CAST(h.fromTime AS LocalDate)";
 
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("from", from);
         parameters.put("to", to);
+
+        log.info("Creating healthDataReader for date: {}", date);
 
         return new JpaPagingItemReaderBuilder<Map<String, Object>>()
                 .name("healthDataReader")
@@ -95,7 +106,6 @@ public class DailyHealthDataAggregationJob {
             Long totalSteps = (Long) item.get("totalSteps");
             Double totalCalories = (Double) item.get("totalCalories");
             Double totalDistance = (Double) item.get("totalDistance");
-            Long entryCount = (Long) item.get("entryCount");
 
             HealthDataSummary summary = HealthDataSummary.create(recordKey, summaryDate);
             summary.addData(
@@ -115,11 +125,11 @@ public class DailyHealthDataAggregationJob {
     public ItemWriter<HealthDataSummary> healthDataWriter() {
         return items -> {
             for (HealthDataSummary summary : items) {
-                // MySQL에 저장
+                // 1. 일별 합계를 MySQL에 저장
                 HealthDataSummaryJpaEntity entity = summaryMapper.toEntity(summary);
                 summaryRepository.save(entity);
 
-                // Redis에 Warm Data로 캐싱 (7일간 보관)
+                // 2. Redis에 Warm Data로 캐싱 (7일간 보관)
                 cacheRepository.saveWarmData(
                         summary.getRecordKey(),
                         summary.getSummaryDate(),
@@ -127,7 +137,7 @@ public class DailyHealthDataAggregationJob {
                         Duration.ofDays(7)
                 );
 
-                log.info("Saved summary: recordKey={}, date={}, steps={}, calories={}, distance={}",
+                log.info("Saved daily summary: recordKey={}, date={}, steps={}, calories={}, distance={}",
                         summary.getRecordKey(), summary.getSummaryDate(),
                         summary.getTotalSteps(), summary.getTotalCalories(), summary.getTotalDistance());
             }
