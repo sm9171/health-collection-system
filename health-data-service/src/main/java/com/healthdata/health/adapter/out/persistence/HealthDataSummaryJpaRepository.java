@@ -5,11 +5,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface HealthDataSummaryJpaRepository extends JpaRepository<HealthDataSummaryJpaEntity, Long> {
 
     Optional<HealthDataSummaryJpaEntity> findByRecordKeyAndSummaryDate(String recordKey, LocalDate summaryDate);
+
+    List<HealthDataSummaryJpaEntity> findByRecordKeyOrderBySummaryDateDesc(String recordKey);
 
     @Query("SELECT COALESCE(SUM(e.totalSteps), 0) FROM HealthDataSummaryJpaEntity e " +
            "WHERE e.recordKey = :recordKey AND e.summaryDate = :date")
