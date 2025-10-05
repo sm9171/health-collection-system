@@ -121,7 +121,6 @@ curl -X POST http://localhost:8080/api/health/health-data/collect \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {accessToken}" \
   -d '{
-    "recordkey": "7836887b-b12a-440f-af0f-851546504b13",
     "data": {
       "entries": [
         {
@@ -147,7 +146,16 @@ curl -X POST http://localhost:8080/api/health/health-data/collect \
 ### 4. 건강 데이터 조회
 
 ```bash
-curl -X GET "http://localhost:8080/api/health/health-data?recordKey=7836887b-b12a-440f-af0f-851546504b13&from=2024-11-15T00:00:00&to=2024-11-15T23:59:59" \
+# 원본 데이터 조회 (기간별)
+curl -X GET "http://localhost:8080/api/health/health-data?from=2024-11-15T00:00:00&to=2024-11-15T23:59:59" \
+  -H "Authorization: Bearer {accessToken}"
+
+# 일별 집계 데이터 조회
+curl -X GET "http://localhost:8080/api/health/health-data/daily-summaries" \
+  -H "Authorization: Bearer {accessToken}"
+
+# 월별 집계 데이터 조회
+curl -X GET "http://localhost:8080/api/health/health-data/monthly-summaries" \
   -H "Authorization: Bearer {accessToken}"
 ```
 
@@ -250,10 +258,15 @@ grep -i error logs/*.log
          │         └──→ Redis Hot Data (24시간 TTL)
          │              - 실시간 집계
          │
-         └──→ Batch Job (매일 새벽 2시)
-              └──→ MySQL (health_data_summary)
-                   └──→ Redis Warm Data (7일 TTL)
-                        - 일별 요약 캐싱
+         └──→ Batch Jobs
+              ├──→ Daily Batch (매일 새벽 2시)
+              │    └──→ MySQL (daily_health_data_summary)
+              │         └──→ Redis Warm Data (7일 TTL)
+              │              - 일별 요약 캐싱
+              │
+              └──→ Monthly Batch (매월 1일 새벽 3시)
+                   └──→ MySQL (monthly_health_data_summary)
+                        - 월별 집계 데이터
 ```
 
 ### 데이터 계층별 역할
@@ -275,10 +288,17 @@ grep -i error logs/*.log
 - **용도**: 당일 실시간 집계 데이터
 - **갱신 주기**: Kafka Streams가 10분마다 업데이트
 
-#### 4. MySQL Summary (`health_data_summary`)
+#### 4. MySQL Daily Summary (`daily_health_data_summary`)
 - **생성 시점**: 매일 새벽 2시 배치 작업
 - **용도**: 일별 집계 데이터 영구 보관
 - **데이터**: 전날 하루치 집계 (총 걸음수, 칼로리, 거리, 엔트리 수)
+- **조회 API**: `GET /health-data/daily-summaries`
+
+#### 4-1. MySQL Monthly Summary (`monthly_health_data_summary`)
+- **생성 시점**: 매월 1일 새벽 3시 배치 작업
+- **용도**: 월별 집계 데이터 영구 보관
+- **데이터**: 전월 일별 집계 합산 (총 걸음수, 칼로리, 거리, 엔트리 수)
+- **조회 API**: `GET /health-data/monthly-summaries`
 
 #### 5. Redis Warm Data
 - **Key 패턴**: `health:warm:{recordKey}:{date}`
@@ -295,8 +315,9 @@ grep -i error logs/*.log
 - `KafkaStreamsConfig` - Kafka Streams 설정
 
 **배치 관련:**
-- `DailyHealthDataAggregationJob` - 일별 집계 배치 작업
-- `BatchScheduler` - 스케줄러 (매일 새벽 2시 실행, Cron: `0 0 2 * * *`)
+- `DailyHealthDataAggregationJob` - 일별 집계 배치 작업 (매일 새벽 2시)
+- `MonthlyHealthDataAggregationJob` - 월별 집계 배치 작업 (매월 1일 새벽 3시)
+- `BatchScheduler` - 배치 스케줄러 및 수동 실행 지원
 
 **캐시 관련:**
 - `HealthDataCacheRepository` - Redis Hot/Warm Data 조회 및 저장
@@ -304,17 +325,23 @@ grep -i error logs/*.log
 
 ### 성능 최적화 전략
 
+#### 일별 집계 조회 (`GET /daily-summaries`)
+1. **오늘 데이터**:
+   - daily_health_data_summary에 있으면 배치 데이터 사용
+   - 없으면 health_data에서 실시간 집계
+2. **과거 데이터**:
+   - Redis Warm Data 조회
+   - Cache Miss 시 MySQL daily_health_data_summary 조회
+
+#### 월별 집계 조회 (`GET /monthly-summaries`)
+1. MySQL monthly_health_data_summary 직접 조회
+
 #### 실시간 조회 (당일 데이터)
 1. Redis Hot Data 우선 조회
 2. Cache Miss 시 MySQL 원본 조회
 
-#### 과거 데이터 조회
-1. Redis Warm Data 조회
-2. Cache Miss 시 MySQL Summary 조회
-3. Summary 없을 시 원본 데이터 조회
-
-#### 상세 데이터 조회
-- MySQL 원본 데이터 직접 조회
+#### 상세 데이터 조회 (`GET /health-data`)
+- MySQL health_data 원본 데이터 직접 조회
 
 ### Kafka & Redis 모니터링
 
@@ -347,26 +374,41 @@ KEYS health:*
 ```bash
 docker exec -it health-mysql mysql -uroot -proot healthdb
 
-# 요약 데이터 조회
-SELECT * FROM health_data_summary
+# 일별 요약 데이터 조회
+SELECT * FROM daily_health_data_summary
 WHERE record_key = '{recordKey}'
 ORDER BY summary_date DESC;
+
+# 월별 요약 데이터 조회
+SELECT * FROM monthly_health_data_summary
+WHERE record_key = '{recordKey}'
+ORDER BY summary_year DESC, summary_month DESC;
+
+# Spring Batch 실행 이력 조회
+SELECT * FROM BATCH_JOB_EXECUTION
+ORDER BY CREATE_TIME DESC;
 ```
 
 ### 배치 작업 관리
 
-#### 배치 스케줄 변경
-```java
-// BatchScheduler.java
-@Scheduled(cron = "0 0 2 * * *")  // 매일 새벽 2시
-public void runDailyAggregation()
+#### 배치 스케줄
+- **일별 배치**: 매일 새벽 2시 (`0 0 2 * * *`)
+- **월별 배치**: 매월 1일 새벽 3시 (`0 0 3 1 * *`)
+
+#### 수동 배치 실행
+```bash
+# 특정 날짜로 일별 배치 실행
+./gradlew :health-data-service:test --tests "BatchSchedulerManualTest.runDailyBatchForTargetDay"
+
+# 특정 월로 월별 배치 실행
+./gradlew :health-data-service:test --tests "BatchSchedulerManualTest.runMonthlyBatchForTargetMonth"
 ```
 
-#### 수동 배치 실행 (테스트용)
+테스트 파일에서 날짜를 수정하고 `@Disabled` 어노테이션을 제거하여 실행합니다:
 ```java
-// BatchScheduler.java에서 활성화
-@Scheduled(fixedDelay = 60000)  // 1분마다
-public void runTestAggregation()
+// BatchSchedulerManualTest.java
+LocalDate targetDay = LocalDate.of(2025, 10, 5);  // 원하는 날짜로 변경
+YearMonth targetMonth = YearMonth.of(2025, 10);   // 원하는 월로 변경
 ```
 
 ---
