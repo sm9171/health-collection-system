@@ -36,7 +36,6 @@ public class HealthDataController {
     @ApiResponse(responseCode = "400", description = "입력값 검증 실패")
     @ApiResponse(responseCode = "409", description = "이미 수집된 데이터")
     public ResponseEntity<CollectResponse> collectHealthData(
-            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail,
             @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey,
             @Valid @RequestBody HealthDataCollectionRequest request) {
 
@@ -68,7 +67,6 @@ public class HealthDataController {
                 content = @Content(schema = @Schema(implementation = HealthDataListResponse.class)))
     @ApiResponse(responseCode = "400", description = "입력값 검증 실패")
     public ResponseEntity<HealthDataListResponse> query(
-            @Parameter(hidden = true) @RequestHeader("X-User-Email") String userEmail,
             @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey,
             @Parameter(description = "조회 시작 시간 (ISO DateTime)", required = true)
             @RequestParam @DateTimeFormat(iso = ISO.DATE_TIME) LocalDateTime from,
@@ -82,6 +80,28 @@ public class HealthDataController {
                 .build();
 
         HealthDataListResponse response = queryHealthDataUseCase.query(command);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/daily")
+    @Operation(summary = "일별 건강 데이터 합산 조회", description = "사용자의 모든 일별 건강 활동 합산 데이터를 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "데이터 조회 성공",
+                content = @Content(schema = @Schema(implementation = DailySummaryResponse.class)))
+    public ResponseEntity<DailySummaryResponse> queryDailySummaries(
+            @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey) {
+
+        DailySummaryResponse response = queryHealthDataUseCase.queryDailySummaries(recordKey);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/monthly")
+    @Operation(summary = "월별 건강 데이터 합산 조회", description = "사용자의 모든 월별 건강 활동 합산 데이터를 조회합니다.")
+    @ApiResponse(responseCode = "200", description = "데이터 조회 성공",
+                content = @Content(schema = @Schema(implementation = MonthlySummaryResponse.class)))
+    public ResponseEntity<MonthlySummaryResponse> queryMonthlySummaries(
+            @Parameter(hidden = true) @RequestHeader("X-Record-Key") String recordKey) {
+
+        MonthlySummaryResponse response = queryHealthDataUseCase.queryMonthlySummaries(recordKey);
         return ResponseEntity.ok(response);
     }
 }

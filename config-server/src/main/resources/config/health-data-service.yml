@@ -17,6 +17,52 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: health-data-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: '*'
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    streams:
+      application-id: health-data-streams
+      properties:
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        commit.interval.ms: 10000
+
+  # Redis Configuration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 10
+          min-idle: 2
+
+  # Batch Configuration
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false  # 스케줄러로만 실행
+
+# Kafka Topics
+kafka:
+  topic:
+    health-data-collected: health-data-collected
+
 eureka:
   client:
     service-url:
@@ -30,3 +76,6 @@ logging:
   level:
     com.healthdata: DEBUG
     org.springframework.web: INFO
+    org.springframework.kafka: INFO
+    org.apache.kafka: WARN
+    org.springframework.batch: INFO
